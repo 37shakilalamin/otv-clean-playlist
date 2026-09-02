@@ -83,4 +83,4 @@ print(f"Output file     : {OUTPUT_FILE}")
 print("")
 print("Allowed groups:")
 for group in sorted(ALLOWED_GROUPS):
-    print(f" - {group}")
+    print(f" - {group}") 
