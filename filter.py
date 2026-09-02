@@ -11,67 +11,76 @@ ALLOWED_GROUPS = {
     "INDIAN | ENTERTAINMENT",
     "INDIAN | MOVIES",
     "INDIAN | ENGLISH MOVIES",
-    "INDIAN | D2H ACTIVE"
+    "INDIAN | D2H ACTIVE",
 }
 
-req = urllib.request.Request(
+# Download the original playlist
+request = urllib.request.Request(
     SOURCE_URL,
     headers={"User-Agent": "Mozilla/5.0"}
 )
 
-with urllib.request.urlopen(req, timeout=120) as response:
+with urllib.request.urlopen(request, timeout=120) as response:
     content = response.read().decode("utf-8", errors="ignore")
 
 lines = content.splitlines()
 
-output = []
+output = ["#EXTM3U"]
 current_entry = []
-current_allowed = False
+current_group = None
+kept_channels = 0
+skipped_channels = 0
+
+
+def save_current_entry():
+    global kept_channels, skipped_channels
+
+    if not current_entry:
+        return
+
+    if current_group in ALLOWED_GROUPS:
+        output.extend(current_entry)
+        kept_channels += 1
+    else:
+        skipped_channels += 1
+
 
 for line in lines:
+    line = line.rstrip("\r")
 
+    # Start of a new channel
     if line.startswith("#EXTINF"):
-        # Save previous channel
-        if current_entry and current_allowed:
-            output.extend(current_entry)
+        save_current_entry()
 
-        # Start new channel
         current_entry = [line]
-        current_allowed = False
+        current_group = None
 
-        match = re.search(r'group-title="([^"]*)"', line)
+        # Read group-title
+        match = re.search(r'group-title\s*=\s*"([^"]*)"', line, re.IGNORECASE)
 
         if match:
-            group = match.group(1).strip()
+            current_group = match.group(1).strip()
 
-            if group in ALLOWED_GROUPS:
-                current_allowed = True
-
-    elif line.startswith("#EXTVLCOPT"):
+    else:
+        # Add all lines belonging to the current channel
         if current_entry:
             current_entry.append(line)
 
-    elif line.startswith("#KODIPROP"):
-        if current_entry:
-            current_entry.append(line)
+# Save the last channel
+save_current_entry()
 
-    elif line.strip() and not line.startswith("#"):
-        if current_entry:
-            current_entry.append(line)
+# Write the filtered playlist
+with open(OUTPUT_FILE, "w", encoding="utf-8", newline="\n") as file:
+    file.write("\n".join(output))
+    file.write("\n")
 
-    elif line.startswith("#"):
-        if current_entry:
-            current_entry.append(line)
-
-# Save final channel
-if current_entry and current_allowed:
-    output.extend(current_entry)
-
-with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-    f.write("\n".join(output) + "\n")
-
-print("Clean playlist updated successfully.")
+print("========================================")
+print("Clean playlist updated successfully")
+print("========================================")
+print(f"Kept channels   : {kept_channels}")
+print(f"Skipped channels: {skipped_channels}")
+print(f"Output file     : {OUTPUT_FILE}")
+print("")
 print("Allowed groups:")
-
 for group in sorted(ALLOWED_GROUPS):
-    print(" - " + group)
+    print(f" - {group}")
